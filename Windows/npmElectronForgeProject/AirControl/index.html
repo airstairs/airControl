@@ -1,0 +1,1185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>airControl</title>
+    <!-- Tailwind CSS Standalone Minified Stylesheet -->
+    <link rel="stylesheet" href="tailwind.min.css">
+    <style>
+        /* Android System Style Resets */
+        * {
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #0F172A;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Roboto', 'Segoe UI', sans-serif;
+        }
+        /* Custom Palette Utility Fallbacks for Static Tailwind Build */
+        .bg-android-bg { background-color: #0F172A; }
+        .bg-android-surface { background-color: #1E293B; }
+        .bg-android-card { background-color: #182232; }
+
+        /* Lock canvas gestures so swipe/scroll doesn't interfere */
+        canvas#gameCanvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+            touch-action: none;
+        }
+        /* Material Android Glass Card */
+        .android-card {
+            background: rgba(30, 41, 59, 0.85);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(34, 197, 94, 0.2);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 0 15px rgba(34, 197, 94, 0.08);
+        }
+        .android-btn {
+            background: rgba(30, 41, 59, 0.9);
+            border: 1px solid rgba(34, 197, 94, 0.3);
+            transition: all 0.15s ease;
+        }
+        .android-btn:active {
+            transform: scale(0.92);
+            background: rgba(34, 197, 94, 0.2);
+        }
+    </style>
+</head>
+<body class="relative flex items-center justify-center text-slate-100 select-none">
+
+    <!-- Game Canvas -->
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- Top Android HUD Overlay -->
+    <div id="hud" class="absolute top-4 left-4 right-4 flex justify-between items-center pointer-events-none z-10">
+        <!-- Score & Stats Panel -->
+        <div class="android-card rounded-2xl px-4 py-2.5 flex items-center gap-4 shadow-2xl">
+            <div class="flex items-center gap-2">
+                <div class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></div>
+                <div>
+                    <div class="text-[9px] font-mono tracking-wider text-emerald-400 uppercase font-bold">Landed</div>
+                    <div id="scoreText" class="text-xl font-black text-white font-mono leading-none">0</div>
+                </div>
+            </div>
+            <div class="h-7 w-px bg-slate-700/80" style="background-color: rgba(51, 65, 85, 0.8);"></div>
+            <div>
+                <div class="text-[9px] font-mono tracking-wider text-amber-400 uppercase font-bold">In Air</div>
+                <div id="airborneText" class="text-xl font-black text-amber-400 font-mono leading-none">0</div>
+            </div>
+            <div class="h-7 w-px bg-slate-700/80" style="background-color: rgba(51, 65, 85, 0.8);"></div>
+            <div>
+                <div class="text-[9px] font-mono tracking-wider text-slate-400 uppercase font-bold">Best</div>
+                <div id="highScoreText" class="text-xl font-black text-emerald-300 font-mono leading-none">0</div>
+            </div>
+        </div>
+
+        <!-- Controls Action Bar -->
+        <div class="flex items-center gap-2 pointer-events-auto">
+            <!-- Pause/Play Button -->
+            <button id="pauseBtn" aria-label="Pause Simulation" class="android-btn p-3 rounded-2xl text-emerald-400 hover:text-emerald-300 shadow-lg">
+                <svg id="pauseIcon" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                <svg id="playIcon" class="w-6 h-6 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            </button>
+            
+            <!-- Audio Toggle Button -->
+            <button id="audioBtn" aria-label="Toggle Audio" class="android-btn p-3 rounded-2xl text-emerald-400 hover:text-emerald-300 shadow-lg">
+                <svg id="audioIconOn" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"></path></svg>
+                <svg id="audioIconOff" class="w-6 h-6 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2"></path></svg>
+            </button>
+
+            <!-- Reset Map Layout Button -->
+            <button id="resetMapBtn" title="Generate New Level Layout" class="android-btn p-3 rounded-2xl text-emerald-400 hover:text-emerald-300 shadow-lg">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+            </button>
+        </div>
+    </div>
+
+    <!-- Pause Indicator Overlay Banner -->
+    <div id="pauseOverlay" class="absolute inset-0 flex flex-col items-center justify-center p-6 z-20 hidden pointer-events-auto" style="background-color: rgba(2, 6, 23, 0.6); backdrop-filter: blur(4px);">
+        <div class="android-card p-8 rounded-3xl max-w-xs w-full text-center flex flex-col items-center">
+            <div class="w-16 h-16 mb-4 rounded-2xl flex items-center justify-center text-emerald-400" style="background-color: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3);">
+                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            </div>
+            <h2 class="text-2xl font-bold text-white mb-1">Airspace Paused</h2>
+            <p class="text-xs text-slate-400 mb-6">Game state saved. Resume whenever ready.</p>
+            
+            <button id="resumeOverlayBtn" class="w-full py-3.5 px-6 rounded-2xl text-slate-950 font-extrabold shadow-lg active:scale-95 transition duration-150 mb-3" style="background: linear-gradient(to right, #10b981, #22c55e); color: #020617;">
+                Resume Flight Control
+            </button>
+            <button id="newMapOverlayBtn" class="w-full py-3 px-6 rounded-2xl bg-slate-800 hover:bg-slate-700 text-emerald-400 font-bold active:scale-95 transition duration-150 text-sm" style="border: 1px solid rgba(16, 185, 129, 0.3);">
+                New Map Layout
+            </button>
+        </div>
+    </div>
+
+    <!-- Game Over Screen -->
+    <div id="gameOverScreen" class="absolute inset-0 flex flex-col items-center justify-center p-6 z-30 text-center hidden pointer-events-auto" style="background-color: rgba(2, 6, 23, 0.8); backdrop-filter: blur(8px);">
+        <div class="android-card p-8 rounded-3xl max-w-md w-full flex flex-col items-center">
+            <div class="w-16 h-16 mb-4 rounded-2xl flex items-center justify-center text-rose-400" style="background-color: rgba(244, 63, 94, 0.1); border: 1px solid rgba(244, 63, 94, 0.3);">
+                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+            </div>
+            <h2 class="text-3xl font-extrabold text-white mb-1">Airspace Collision</h2>
+            <p class="text-slate-400 text-xs mb-6">Aircraft safety boundaries were breached.</p>
+
+            <div class="grid grid-cols-2 gap-4 w-full mb-6">
+                <div class="android-card p-4 rounded-2xl" style="border: 1px solid rgba(16, 185, 129, 0.2);">
+                    <div class="text-[10px] text-slate-400 uppercase font-mono font-bold">Landings</div>
+                    <div id="finalScore" class="text-3xl font-black text-emerald-400 font-mono mt-1">0</div>
+                </div>
+                <div class="android-card p-4 rounded-2xl" style="border: 1px solid rgba(16, 185, 129, 0.2);">
+                    <div class="text-[10px] text-slate-400 uppercase font-mono font-bold">High Score</div>
+                    <div id="finalHighScore" class="text-3xl font-black text-emerald-300 font-mono mt-1">0</div>
+                </div>
+            </div>
+
+            <button id="restartBtn" class="w-full py-4 px-8 rounded-2xl text-slate-950 font-extrabold text-lg shadow-lg active:scale-95 transition duration-150" style="background: linear-gradient(to right, #10b981, #22c55e); color: #020617;">
+                Restart Level
+            </button>
+        </div>
+    </div>
+
+    <!-- Core Game & Persistence Code -->
+    <script>
+        // --- Web Audio Synthesizer ---
+        class AudioEngine {
+            constructor() {
+                this.ctx = null;
+                this.muted = false;
+            }
+
+            init() {
+                if (!this.ctx) {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    if (AudioContext) {
+                        this.ctx = new AudioContext();
+                    }
+                }
+                if (this.ctx && this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
+            }
+
+            playChime() {
+                if (this.muted || !this.ctx) return;
+                try {
+                    const now = this.ctx.currentTime;
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(523.25, now);
+                    osc.frequency.exponentialRampToValueAtTime(1046.50, now + 0.3);
+
+                    gain.gain.setValueAtTime(0.12, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(now);
+                    osc.stop(now + 0.35);
+                } catch(e){}
+            }
+
+            playPathTone() {
+                if (this.muted || !this.ctx) return;
+                try {
+                    const now = this.ctx.currentTime;
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(329.63, now);
+                    gain.gain.setValueAtTime(0.04, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(now);
+                    osc.stop(now + 0.08);
+                } catch(e){}
+            }
+
+            playAlertPing() {
+                if (this.muted || !this.ctx) return;
+                try {
+                    const now = this.ctx.currentTime;
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(880, now);
+                    gain.gain.setValueAtTime(0.05, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(now);
+                    osc.stop(now + 0.15);
+                } catch(e){}
+            }
+
+            playProximityWarning() {
+                if (this.muted || !this.ctx) return;
+                try {
+                    const now = this.ctx.currentTime;
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(180, now);
+                    osc.frequency.linearRampToValueAtTime(120, now + 0.1);
+
+                    gain.gain.setValueAtTime(0.06, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(now);
+                    osc.stop(now + 0.12);
+                } catch(e){}
+            }
+
+            playCrash() {
+                if (this.muted || !this.ctx) return;
+                try {
+                    const now = this.ctx.currentTime;
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(120, now);
+                    osc.frequency.exponentialRampToValueAtTime(30, now + 0.6);
+
+                    gain.gain.setValueAtTime(0.3, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
+
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(now);
+                    osc.stop(now + 0.6);
+                } catch(e){}
+            }
+        }
+
+        const audio = new AudioEngine();
+
+        // --- Color Palette ---
+        const COLORS = {
+            GREEN: { id: 'GREEN', hex: '#22C55E', glow: 'rgba(34, 197, 94, 0.5)', name: 'Jet' },
+            GOLD: { id: 'GOLD', hex: '#F59E0B', glow: 'rgba(245, 158, 11, 0.5)', name: 'Airliner' },
+            CYAN: { id: 'CYAN', hex: '#06B6D4', glow: 'rgba(6, 182, 212, 0.5)', name: 'Prop' },
+            LIME: { id: 'LIME', hex: '#84CC16', glow: 'rgba(132, 204, 22, 0.5)', name: 'Heli' }
+        };
+
+        const AIRCRAFT_TYPES = [
+            { type: 'JUMBO', colorKey: 'GREEN', speed: 55, radius: 16, isHeli: false },
+            { type: 'AIRLINER', colorKey: 'GOLD', speed: 45, radius: 14, isHeli: false },
+            { type: 'PROP', colorKey: 'CYAN', speed: 35, radius: 12, isHeli: false },
+            { type: 'HELI', colorKey: 'LIME', speed: 28, radius: 12, isHeli: true }
+        ];
+
+        // --- Canvas Setup & State ---
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        let width = 0;
+        let height = 0;
+        let dpr = 1;
+
+        let gameState = 'PLAYING';
+        let score = 0;
+        let highScore = parseInt(localStorage.getItem('airControl_highScore') || '0', 10);
+
+        let runways = [];
+        let aircrafts = [];
+        let particles = [];
+        let edgePings = [];
+
+        let lastTime = 0;
+        let spawnTimer = 0;
+        let spawnInterval = 6.5;
+        let warningTimer = 0;
+        let collisionPoint = null;
+
+        // UI Element References
+        const scoreText = document.getElementById('scoreText');
+        const airborneText = document.getElementById('airborneText');
+        const highScoreText = document.getElementById('highScoreText');
+        const pauseOverlay = document.getElementById('pauseOverlay');
+        const gameOverScreen = document.getElementById('gameOverScreen');
+        const finalScore = document.getElementById('finalScore');
+        const finalHighScore = document.getElementById('finalHighScore');
+        const restartBtn = document.getElementById('restartBtn');
+        const pauseBtn = document.getElementById('pauseBtn');
+        const audioBtn = document.getElementById('audioBtn');
+        const resetMapBtn = document.getElementById('resetMapBtn');
+        const resumeOverlayBtn = document.getElementById('resumeOverlayBtn');
+        const newMapOverlayBtn = document.getElementById('newMapOverlayBtn');
+        const pauseIcon = document.getElementById('pauseIcon');
+        const playIcon = document.getElementById('playIcon');
+        const audioIconOn = document.getElementById('audioIconOn');
+        const audioIconOff = document.getElementById('audioIconOff');
+
+        highScoreText.textContent = highScore;
+
+        // --- Responsive Window Resizing ---
+        function resizeCanvas() {
+            dpr = window.devicePixelRatio || 1;
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width * dpr;
+            canvas.height = height * dpr;
+            ctx.scale(dpr, dpr);
+        }
+
+        window.addEventListener('resize', () => {
+            resizeCanvas();
+        });
+
+        // --- Procedural Map Generator ---
+        function generateProceduralAirport() {
+            runways = [];
+            const margin = Math.min(width, height) * 0.15;
+            const centerX = width / 2;
+            const centerY = height / 2;
+
+            const availableColors = [COLORS.GREEN, COLORS.GOLD, COLORS.CYAN];
+            availableColors.sort(() => Math.random() - 0.5);
+
+            // Runway 1
+            const len1 = Math.min(width, height) * 0.28;
+            const angle1 = (Math.random() * Math.PI * 0.75) - (Math.PI * 0.375);
+            runways.push({
+                x: centerX + (Math.random() - 0.5) * margin * 1.5 - len1 * 0.2,
+                y: centerY + (Math.random() - 0.5) * margin * 1.5 - len1 * 0.2,
+                length: len1,
+                width: 28,
+                angle: angle1,
+                color: availableColors[0],
+                isHeli: false
+            });
+
+            // Runway 2
+            const len2 = Math.min(width, height) * 0.24;
+            const angle2 = angle1 + (Math.PI * 0.35) + (Math.random() * 0.3);
+            runways.push({
+                x: centerX + (Math.random() - 0.5) * margin * 2,
+                y: centerY + (Math.random() - 0.5) * margin * 2,
+                length: len2,
+                width: 26,
+                angle: angle2,
+                color: availableColors[1],
+                isHeli: false
+            });
+
+            // Helipad
+            runways.push({
+                x: Math.max(margin, Math.min(width - margin, centerX + (Math.random() - 0.5) * width * 0.5)),
+                y: Math.max(margin, Math.min(height - margin, centerY + (Math.random() - 0.5) * height * 0.5)),
+                radius: 26,
+                color: COLORS.LIME,
+                isHeli: true
+            });
+        }
+
+        // --- Aircraft Spawning Logic ---
+        function spawnAircraft() {
+            const activeRunwayTypes = runways.map(r => r.color.id);
+            const validTypes = AIRCRAFT_TYPES.filter(t => activeRunwayTypes.includes(t.colorKey));
+            const typeConfig = validTypes[Math.floor(Math.random() * validTypes.length)];
+
+            const padding = 40;
+            let x, y, targetAngle;
+            const edge = Math.floor(Math.random() * 4);
+
+            if (edge === 0) { // Top
+                x = Math.random() * width;
+                y = -padding;
+                targetAngle = Math.PI / 2 + (Math.random() - 0.5) * 0.8;
+            } else if (edge === 1) { // Right
+                x = width + padding;
+                y = Math.random() * height;
+                targetAngle = Math.PI + (Math.random() - 0.5) * 0.8;
+            } else if (edge === 2) { // Bottom
+                x = Math.random() * width;
+                y = height + padding;
+                targetAngle = -Math.PI / 2 + (Math.random() - 0.5) * 0.8;
+            } else { // Left
+                x = -padding;
+                y = Math.random() * height;
+                targetAngle = (Math.random() - 0.5) * 0.8;
+            }
+
+            const aircraft = {
+                id: Math.random().toString(36).substr(2, 9),
+                x: x,
+                y: y,
+                angle: targetAngle,
+                speed: typeConfig.speed,
+                type: typeConfig.type,
+                color: COLORS[typeConfig.colorKey],
+                radius: typeConfig.radius,
+                isHeli: typeConfig.isHeli,
+                landing: false,
+                landingProgress: 0,
+                landingRunway: null,
+                warning: false,
+                isPaused: false,
+                path: []
+            };
+
+            aircrafts.push(aircraft);
+
+            const pingX = Math.max(20, Math.min(width - 20, x));
+            const pingY = Math.max(20, Math.min(height - 20, y));
+            edgePings.push({
+                x: pingX,
+                y: pingY,
+                color: aircraft.color.hex,
+                radius: 10,
+                maxRadius: 35,
+                alpha: 1
+            });
+
+            audio.playAlertPing();
+            saveGameState();
+        }
+
+        // --- Persistence ---
+        function saveGameState() {
+            if (gameState === 'GAMEOVER') return;
+
+            const state = {
+                score: score,
+                spawnTimer: spawnTimer,
+                spawnInterval: spawnInterval,
+                runways: runways,
+                aircrafts: aircrafts.map(a => ({
+                    id: a.id,
+                    x: a.x,
+                    y: a.y,
+                    angle: a.angle,
+                    speed: a.speed,
+                    type: a.type,
+                    colorKey: a.color.id,
+                    radius: a.radius,
+                    isHeli: a.isHeli,
+                    landing: a.landing,
+                    landingProgress: a.landingProgress,
+                    isPaused: a.isPaused || false,
+                    path: a.path || []
+                })),
+                widthRatio: width,
+                heightRatio: height
+            };
+
+            localStorage.setItem('airControl_savedState', JSON.stringify(state));
+        }
+
+        function loadSavedGameState() {
+            const savedStr = localStorage.getItem('airControl_savedState');
+            if (!savedStr) return false;
+
+            try {
+                const state = JSON.parse(savedStr);
+                if (!state || !state.runways || state.runways.length === 0) return false;
+
+                score = state.score || 0;
+                spawnTimer = state.spawnTimer || 0;
+                spawnInterval = state.spawnInterval || 6.5;
+
+                const scaleX = state.widthRatio ? width / state.widthRatio : 1;
+                const scaleY = state.heightRatio ? height / state.heightRatio : 1;
+
+                runways = state.runways.map(r => ({
+                    ...r,
+                    x: r.x * scaleX,
+                    y: r.y * scaleY,
+                    length: r.length * Math.min(scaleX, scaleY),
+                    color: COLORS[r.color.id] || r.color
+                }));
+
+                aircrafts = (state.aircrafts || []).map(a => ({
+                    ...a,
+                    x: a.x * scaleX,
+                    y: a.y * scaleY,
+                    color: COLORS[a.colorKey] || COLORS.GREEN,
+                    isPaused: a.isPaused || false,
+                    path: (a.path || []).map(p => ({ x: p.x * scaleX, y: p.y * scaleY }))
+                }));
+
+                scoreText.textContent = score;
+                return true;
+            } catch (e) {
+                console.warn('Failed to load saved state', e);
+                return false;
+            }
+        }
+
+        window.addEventListener('beforeunload', () => saveGameState());
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden && gameState === 'PLAYING') {
+                togglePause(true);
+            }
+            saveGameState();
+        });
+
+        // --- Particle System ---
+        function createLandingParticles(x, y, colorHex) {
+            for (let i = 0; i < 20; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = 20 + Math.random() * 60;
+                particles.push({
+                    x: x,
+                    y: y,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed,
+                    life: 1.0,
+                    decay: 1.2 + Math.random() * 1.5,
+                    color: colorHex,
+                    size: 2 + Math.random() * 3
+                });
+            }
+        }
+
+        function createEngineTrail(aircraft) {
+            if (Math.random() > 0.3 || aircraft.isPaused) return;
+            const rearX = aircraft.x - Math.cos(aircraft.angle) * aircraft.radius;
+            const rearY = aircraft.y - Math.sin(aircraft.angle) * aircraft.radius;
+            particles.push({
+                x: rearX,
+                y: rearY,
+                vx: (Math.random() - 0.5) * 5,
+                vy: (Math.random() - 0.5) * 5,
+                life: 0.6,
+                decay: 1.8,
+                color: aircraft.color.hex,
+                size: 2
+            });
+        }
+
+        // --- Touch / Drag & Flight Path Input System ---
+        let activeDragAircraft = null;
+        let startTouchPos = null;
+        let isDraggingPath = false;
+
+        function getEventPos(e) {
+            const rect = canvas.getBoundingClientRect();
+            let clientX, clientY;
+
+            if (e.touches && e.touches.length > 0) {
+                clientX = e.touches[0].clientX;
+                clientY = e.touches[0].clientY;
+            } else if (e.changedTouches && e.changedTouches.length > 0) {
+                clientX = e.changedTouches[0].clientX;
+                clientY = e.changedTouches[0].clientY;
+            } else {
+                clientX = e.clientX;
+                clientY = e.clientY;
+            }
+
+            return {
+                x: clientX - rect.left,
+                y: clientY - rect.top
+            };
+        }
+
+        function handlePointerDown(e) {
+            if (gameState !== 'PLAYING') return;
+            audio.init();
+
+            const pos = getEventPos(e);
+            let closestAircraft = null;
+            let closestDistance = Infinity;
+
+            for (let a of aircrafts) {
+                if (a.landing) continue;
+                const dist = Math.hypot(a.x - pos.x, a.y - pos.y);
+                const maxTouchRadius = Math.max(a.radius * 6.0, 80);
+
+                if (dist <= maxTouchRadius && dist < closestDistance) {
+                    closestDistance = dist;
+                    closestAircraft = a;
+                }
+            }
+
+            if (closestAircraft) {
+                activeDragAircraft = closestAircraft;
+                startTouchPos = pos;
+                isDraggingPath = false;
+            }
+        }
+
+        function handlePointerMove(e) {
+            if (!activeDragAircraft || gameState !== 'PLAYING') return;
+
+            const pos = getEventPos(e);
+            const distFromStart = Math.hypot(pos.x - startTouchPos.x, pos.y - startTouchPos.y);
+
+            // If drag distance exceeds threshold, start drawing flight path
+            if (!isDraggingPath && distFromStart > 12) {
+                isDraggingPath = true;
+                activeDragAircraft.path = [{ x: pos.x, y: pos.y }];
+                if (activeDragAircraft.isPaused) {
+                    activeDragAircraft.isPaused = false;
+                }
+                audio.playPathTone();
+            } else if (isDraggingPath) {
+                const path = activeDragAircraft.path;
+                const lastPoint = path[path.length - 1];
+                if (!lastPoint || Math.hypot(pos.x - lastPoint.x, pos.y - lastPoint.y) > 14) {
+                    path.push({ x: pos.x, y: pos.y });
+                }
+            }
+
+            if (e.cancelable) e.preventDefault();
+        }
+
+        function handlePointerUp(e) {
+            if (!activeDragAircraft || gameState !== 'PLAYING') {
+                activeDragAircraft = null;
+                isDraggingPath = false;
+                return;
+            }
+
+            if (!isDraggingPath) {
+                // Short touch/click without movement -> Toggle pause/hold state
+                activeDragAircraft.isPaused = !activeDragAircraft.isPaused;
+                audio.playPathTone();
+            }
+
+            activeDragAircraft = null;
+            isDraggingPath = false;
+            saveGameState();
+        }
+
+        // Pointer/Touch Listeners
+        canvas.addEventListener('touchstart', (e) => handlePointerDown(e), { passive: false });
+        canvas.addEventListener('touchmove', (e) => handlePointerMove(e), { passive: false });
+        canvas.addEventListener('touchend', (e) => handlePointerUp(e), { passive: false });
+
+        canvas.addEventListener('mousedown', (e) => handlePointerDown(e));
+        canvas.addEventListener('mousemove', (e) => handlePointerMove(e));
+        canvas.addEventListener('mouseup', (e) => handlePointerUp(e));
+
+        canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+        // --- Render Functions ---
+        function drawBackgroundGrid() {
+            ctx.fillStyle = '#0F172A';
+            ctx.fillRect(0, 0, width, height);
+
+            const centerX = width / 2;
+            const centerY = height / 2;
+
+            ctx.lineWidth = 1;
+            ctx.strokeStyle = 'rgba(34, 197, 94, 0.04)';
+
+            for (let r = 100; r < Math.max(width, height); r += 120) {
+                ctx.beginPath();
+                ctx.arc(centerX, centerY, r, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+
+            const gridSize = 60;
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.02)';
+            ctx.beginPath();
+            for (let x = 0; x < width; x += gridSize) {
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, height);
+            }
+            for (let y = 0; y < height; y += gridSize) {
+                ctx.moveTo(0, y);
+                ctx.lineTo(width, y);
+            }
+            ctx.stroke();
+        }
+
+        function drawRunways() {
+            for (let r of runways) {
+                ctx.save();
+                ctx.translate(r.x, r.y);
+
+                if (r.isHeli) {
+                    ctx.strokeStyle = r.color.hex;
+                    ctx.lineWidth = 3;
+                    ctx.shadowColor = r.color.hex;
+                    ctx.shadowBlur = 12;
+
+                    ctx.beginPath();
+                    ctx.arc(0, 0, r.radius, 0, Math.PI * 2);
+                    ctx.stroke();
+
+                    ctx.fillStyle = r.color.hex;
+                    ctx.font = 'bold 20px monospace';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText('H', 0, 1);
+                } else {
+                    ctx.rotate(r.angle);
+
+                    ctx.fillStyle = 'rgba(30, 41, 59, 0.9)';
+                    ctx.strokeStyle = 'rgba(34, 197, 94, 0.3)';
+                    ctx.lineWidth = 1.5;
+                    ctx.beginPath();
+                    if (ctx.roundRect) {
+                        ctx.roundRect(-r.length / 2, -r.width / 2, r.length, r.width, 6);
+                    } else {
+                        ctx.rect(-r.length / 2, -r.width / 2, r.length, r.width);
+                    }
+                    ctx.fill();
+                    ctx.stroke();
+
+                    ctx.fillStyle = r.color.hex;
+                    ctx.shadowColor = r.color.hex;
+                    ctx.shadowBlur = 10;
+                    ctx.fillRect(-r.length / 2, -r.width / 2, 8, r.width);
+
+                    ctx.strokeStyle = r.color.hex;
+                    ctx.lineWidth = 2;
+                    ctx.setLineDash([8, 6]);
+                    ctx.beginPath();
+                    ctx.moveTo(-r.length / 2 + 12, 0);
+                    ctx.lineTo(r.length / 2 - 6, 0);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                }
+                ctx.restore();
+            }
+        }
+
+        function drawFlightPaths() {
+            for (let a of aircrafts) {
+                if (!a.path || a.path.length === 0) continue;
+
+                ctx.save();
+                ctx.strokeStyle = a.color.hex;
+                ctx.fillStyle = a.color.hex;
+                ctx.lineWidth = 2.5;
+                ctx.shadowColor = a.color.hex;
+                ctx.shadowBlur = 8;
+                ctx.setLineDash([6, 6]);
+
+                ctx.beginPath();
+                ctx.moveTo(a.x, a.y);
+                for (let p of a.path) {
+                    ctx.lineTo(p.x, p.y);
+                }
+                ctx.stroke();
+
+                // Draw waypoint direction dots along the path
+                ctx.setLineDash([]);
+                for (let i = 0; i < a.path.length; i += 2) {
+                    const pt = a.path[i];
+                    ctx.beginPath();
+                    ctx.arc(pt.x, pt.y, 3, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                // Draw end waypoint marker ring
+                const lastPt = a.path[a.path.length - 1];
+                if (lastPt) {
+                    ctx.strokeStyle = a.color.hex;
+                    ctx.lineWidth = 1.5;
+                    ctx.beginPath();
+                    ctx.arc(lastPt.x, lastPt.y, 7, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
+
+                ctx.restore();
+            }
+        }
+
+        function drawAircrafts() {
+            for (let a of aircrafts) {
+                ctx.save();
+                ctx.translate(a.x, a.y);
+
+                // Pulsating ring effect when aircraft is tapped/paused
+                if (a.isPaused) {
+                    const pulseProgress = (Date.now() % 1000) / 1000;
+                    const pulseRadius = a.radius * 2.0 + pulseProgress * 22;
+                    const pulseAlpha = 1.0 - pulseProgress;
+
+                    ctx.save();
+                    ctx.strokeStyle = `rgba(245, 158, 11, ${pulseAlpha})`;
+                    ctx.lineWidth = 2.5;
+                    ctx.shadowColor = '#F59E0B';
+                    ctx.shadowBlur = 12;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, pulseRadius, 0, Math.PI * 2);
+                    ctx.stroke();
+
+                    // Inner static dashed holding ring
+                    ctx.strokeStyle = '#F59E0B';
+                    ctx.lineWidth = 1.5;
+                    ctx.setLineDash([4, 4]);
+                    ctx.beginPath();
+                    ctx.arc(0, 0, a.radius * 2.2, 0, Math.PI * 2);
+                    ctx.stroke();
+                    ctx.restore();
+                }
+
+                if (a.warning) {
+                    const pulse = (Date.now() % 500) / 500;
+                    ctx.strokeStyle = `rgba(244, 63, 94, ${1 - pulse})`;
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, a.radius * 2.2 + pulse * 12, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
+
+                const scale = a.landing ? Math.max(0.1, 1 - a.landingProgress) : 1;
+                ctx.scale(scale, scale);
+                ctx.rotate(a.angle);
+
+                ctx.strokeStyle = a.color.hex;
+                ctx.fillStyle = a.color.hex;
+                ctx.shadowColor = a.color.hex;
+                ctx.shadowBlur = 10;
+                ctx.lineWidth = 2;
+
+                if (a.isHeli) {
+                    ctx.beginPath();
+                    ctx.arc(0, 0, 7, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    const rotorSpeed = a.isPaused ? 80 : 40;
+                    const rotorAngle = (Date.now() / rotorSpeed) % (Math.PI * 2);
+                    ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+                    ctx.beginPath();
+                    ctx.moveTo(Math.cos(rotorAngle) * 14, Math.sin(rotorAngle) * 14);
+                    ctx.lineTo(-Math.cos(rotorAngle) * 14, -Math.sin(rotorAngle) * 14);
+                    ctx.stroke();
+                } else if (a.type === 'JUMBO') {
+                    ctx.beginPath();
+                    ctx.moveTo(14, 0);
+                    ctx.lineTo(-10, -12);
+                    ctx.lineTo(-5, 0);
+                    ctx.lineTo(-10, 12);
+                    ctx.closePath();
+                    ctx.fill();
+                } else {
+                    ctx.beginPath();
+                    ctx.moveTo(12, 0);
+                    ctx.lineTo(-8, -10);
+                    ctx.lineTo(-4, 0);
+                    ctx.lineTo(-8, 10);
+                    ctx.closePath();
+                    ctx.fill();
+                }
+
+                ctx.restore();
+            }
+        }
+
+        function drawEdgePings(dt) {
+            for (let i = edgePings.length - 1; i >= 0; i--) {
+                const p = edgePings[i];
+                p.radius += dt * 30;
+                p.alpha -= dt * 1.2;
+
+                if (p.alpha <= 0) {
+                    edgePings.splice(i, 1);
+                    continue;
+                }
+
+                ctx.save();
+                ctx.strokeStyle = p.color;
+                ctx.lineWidth = 2;
+                ctx.globalAlpha = p.alpha;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.restore();
+            }
+        }
+
+        function drawParticles(dt) {
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.x += p.vx * dt;
+                p.y += p.vy * dt;
+                p.life -= p.decay * dt;
+
+                if (p.life <= 0) {
+                    particles.splice(i, 1);
+                    continue;
+                }
+
+                ctx.save();
+                ctx.fillStyle = p.color;
+                ctx.globalAlpha = p.life;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        function drawCollisionHighlight() {
+            if (!collisionPoint) return;
+            const pulse = (Date.now() % 400) / 400;
+            ctx.save();
+            ctx.strokeStyle = '#f43f5e';
+            ctx.lineWidth = 3;
+            ctx.shadowColor = '#f43f5e';
+            ctx.shadowBlur = 15;
+            ctx.beginPath();
+            ctx.arc(collisionPoint.x, collisionPoint.y, 15 + pulse * 25, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        // --- Game Logic Update Loop ---
+        function updateGame(dt) {
+            if (gameState !== 'PLAYING') return;
+
+            spawnTimer += dt;
+            if (spawnTimer >= spawnInterval) {
+                spawnTimer = 0;
+                spawnInterval = Math.max(3.2, spawnInterval - 0.08);
+                spawnAircraft();
+            }
+
+            aircrafts.forEach(a => a.warning = false);
+            let hasProximityWarning = false;
+
+            for (let i = aircrafts.length - 1; i >= 0; i--) {
+                const a = aircrafts[i];
+
+                createEngineTrail(a);
+
+                if (a.landing) {
+                    a.landingProgress += dt * 1.2;
+                    if (a.landingProgress >= 1.0) {
+                        createLandingParticles(a.x, a.y, a.color.hex);
+                        aircrafts.splice(i, 1);
+                        score++;
+                        scoreText.textContent = score;
+                        audio.playChime();
+                        saveGameState();
+                    }
+                    continue;
+                }
+
+                // If aircraft is in hold/paused state, skip movement and landing calculations
+                if (!a.isPaused) {
+                    // Follow drawn path if available
+                    if (a.path && a.path.length > 0) {
+                        const target = a.path[0];
+                        const distToTarget = Math.hypot(target.x - a.x, target.y - a.y);
+                        
+                        // Turn smoothly toward target waypoint
+                        const targetAngle = Math.atan2(target.y - a.y, target.x - a.x);
+                        let angleDiff = targetAngle - a.angle;
+                        while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+                        while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+
+                        a.angle += angleDiff * Math.min(1.0, dt * 6.0);
+
+                        if (distToTarget < 12) {
+                            a.path.shift();
+                        }
+                    }
+
+                    a.x += Math.cos(a.angle) * a.speed * dt;
+                    a.y += Math.sin(a.angle) * a.speed * dt;
+
+                    for (let r of runways) {
+                        if (r.color.id !== a.color.id) continue;
+
+                        if (r.isHeli) {
+                            const distToHeli = Math.hypot(r.x - a.x, r.y - a.y);
+                            if (distToHeli < 28) {
+                                a.landing = true;
+                                a.path = [];
+                            }
+                        } else {
+                            const startX = r.x - Math.cos(r.angle) * (r.length / 2);
+                            const startY = r.y - Math.sin(r.angle) * (r.length / 2);
+                            const distToStart = Math.hypot(startX - a.x, startY - a.y);
+
+                            let angleDiff = Math.abs(a.angle - r.angle);
+                            while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+                            angleDiff = Math.abs(angleDiff);
+
+                            if (distToStart < 42 && angleDiff < 0.7) {
+                                a.landing = true;
+                                a.angle = r.angle;
+                                a.path = [];
+                            }
+                        }
+                    }
+                }
+
+                for (let j = i - 1; j >= 0; j--) {
+                    const b = aircrafts[j];
+                    if (b.landing) continue;
+
+                    const dist = Math.hypot(a.x - b.x, a.y - b.y);
+
+                    if (dist < 65) {
+                        a.warning = true;
+                        b.warning = true;
+                        hasProximityWarning = true;
+                    }
+
+                    if (dist < (a.radius + b.radius) * 1.1) {
+                        collisionPoint = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+                        triggerGameOver();
+                        return;
+                    }
+                }
+            }
+
+            if (hasProximityWarning) {
+                warningTimer += dt;
+                if (warningTimer > 0.4) {
+                    warningTimer = 0;
+                    audio.playProximityWarning();
+                }
+            }
+
+            airborneText.textContent = aircrafts.filter(a => !a.landing).length;
+        }
+
+        // --- Game Over Logic ---
+        function triggerGameOver() {
+            gameState = 'GAMEOVER';
+            audio.playCrash();
+
+            if (score > highScore) {
+                highScore = score;
+                localStorage.setItem('airControl_highScore', highScore.toString());
+                highScoreText.textContent = highScore;
+            }
+
+            localStorage.removeItem('airControl_savedState');
+
+            finalScore.textContent = score;
+            finalHighScore.textContent = highScore;
+            gameOverScreen.classList.remove('hidden');
+        }
+
+        // --- Main Game Animation Loop ---
+        function gameLoop(timestamp) {
+            if (!lastTime) lastTime = timestamp;
+            const dt = Math.min(0.1, (timestamp - lastTime) / 1000);
+            lastTime = timestamp;
+
+            drawBackgroundGrid();
+            drawRunways();
+            drawFlightPaths();
+            drawAircrafts();
+            drawEdgePings(dt);
+            drawParticles(dt);
+            drawCollisionHighlight();
+
+            if (gameState === 'PLAYING') {
+                updateGame(dt);
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // --- Pause & Flow Controls ---
+        function togglePause(forcePause) {
+            if (forcePause || gameState === 'PLAYING') {
+                gameState = 'PAUSED';
+                pauseIcon.classList.add('hidden');
+                playIcon.classList.remove('hidden');
+                pauseOverlay.classList.remove('hidden');
+                saveGameState();
+            } else if (gameState === 'PAUSED') {
+                gameState = 'PLAYING';
+                playIcon.classList.add('hidden');
+                pauseIcon.classList.remove('hidden');
+                pauseOverlay.classList.add('hidden');
+            }
+        }
+
+        function resetAndStartNewGame(newMap = true) {
+            score = 0;
+            spawnInterval = 6.5;
+            spawnTimer = 0;
+            aircrafts = [];
+            particles = [];
+            edgePings = [];
+            collisionPoint = null;
+            scoreText.textContent = '0';
+            airborneText.textContent = '0';
+
+            if (newMap) {
+                generateProceduralAirport();
+            }
+
+            gameState = 'PLAYING';
+            pauseOverlay.classList.add('hidden');
+            gameOverScreen.classList.add('hidden');
+            pauseIcon.classList.remove('hidden');
+            playIcon.classList.add('hidden');
+
+            spawnAircraft();
+            saveGameState();
+        }
+
+        // --- Button Event Listeners ---
+        pauseBtn.addEventListener('click', () => {
+            audio.init();
+            togglePause();
+        });
+
+        resumeOverlayBtn.addEventListener('click', () => {
+            togglePause();
+        });
+
+        resetMapBtn.addEventListener('click', () => {
+            if (confirm('Generate a new airport layout? Current level progress will reset.')) {
+                resetAndStartNewGame(true);
+            }
+        });
+
+        newMapOverlayBtn.addEventListener('click', () => {
+            resetAndStartNewGame(true);
+        });
+
+        restartBtn.addEventListener('click', () => {
+            resetAndStartNewGame(true);
+        });
+
+        audioBtn.addEventListener('click', () => {
+            audio.init();
+            audio.muted = !audio.muted;
+            if (audio.muted) {
+                audioIconOn.classList.add('hidden');
+                audioIconOff.classList.remove('hidden');
+            } else {
+                audioIconOff.classList.add('hidden');
+                audioIconOn.classList.remove('hidden');
+            }
+        });
+
+        // Initialize canvas & launch instantly into gameplay
+        window.onload = function() {
+            resizeCanvas();
+            
+            const restored = loadSavedGameState();
+            if (!restored) {
+                generateProceduralAirport();
+                spawnAircraft();
+            }
+
+            requestAnimationFrame(gameLoop);
+        };
+    </script>
+</body>
+</html>
